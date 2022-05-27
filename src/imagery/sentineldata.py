@@ -195,9 +195,8 @@ class S2MSINavigator(SentinelAPI):
             query = "{}{}/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}.jp2')/$value"\
                 .format(self.odata_path, product_node, granule, identifier, img_folder, res_folder, file_name)
             image_bytes = self.api_call(query, stream=True)
-            with MemoryFile(image_bytes) as mem_file:
-                with mem_file.open(**profile) as dataset:
-                    return dataset
+            mem_file = MemoryFile(image_bytes)
+            return mem_file.open(**profile)
 
     def get_dataset(self, product_node):
         self._get_manifest(product_node)

@@ -5,8 +5,8 @@ class Collection:
     def __init__(self, platformname, producttype, processinglevel) -> None:
         self.data_source = SentinelData(platformname, producttype, processinglevel)
 
-    def filter_bonds(self, geometry):
-        self.data_source.set_bonds_filter(geometry.bounds)
+    def filter_bounds(self, geometry):
+        self.data_source.set_bounds_filter(geometry.bounds)
         return self
 
     def filter_date(self, begin, end):

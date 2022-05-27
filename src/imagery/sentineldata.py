@@ -176,7 +176,7 @@ class S2MSINavigator(SentinelAPI):
                     files.append(file)
         return files
 
-    def _get_bands(self, product_node, granule_list, bands, resolution):
+    def _get_bands(self, product_node, granule_list, resolution):
         profile = self._get_metadata_profile(resolution)
         size = profile.get('size')
 
@@ -190,20 +190,16 @@ class S2MSINavigator(SentinelAPI):
             'crs': CRS.from_epsg(32617),
         })
 
-        num_bands = len(bands)
-        image = np.zeros((num_bands, size[0], size[1]))
         for i, file_path in enumerate(granule_list):
             granule, identifier, img_folder, res_folder, file_name = file_path.split('/')
             query = "{}{}/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}.jp2')/$value"\
                 .format(self.odata_path, product_node, granule, identifier, img_folder, res_folder, file_name)
             image_bytes = self.api_call(query, stream=True)
-            with MemoryFile(image_bytes) as memfile:
-                with memfile.open(**profile) as dataset:
-                    img = dataset.read()
-                    image[i] = img[0]
-        return image
+            with MemoryFile(image_bytes) as mem_file:
+                with mem_file.open(**profile) as dataset:
+                    return dataset
 
-    def get_tile(self, product_node):
+    def get_dataset(self, product_node):
         self._get_manifest(product_node)
         self._get_product_metadata(product_node)
         granule_title = self._get_granule_title(product_node)
@@ -216,8 +212,8 @@ class S2MSINavigator(SentinelAPI):
         selected_bands = self.selector.get('bands')
         # TODO: navigate to resolution folder
         granule_list = self.filter_granules_by_resolution(granule_list, selected_bands, resolution)
-        bands = self._get_bands(product_node, granule_list, selected_bands, resolution)
-        return MSITile(resolution, bands, profile, resolution)
+        dataset = self._get_bands(product_node, granule_list, resolution)
+        return dataset
 
 
 class SentinelData(Data):
@@ -237,7 +233,7 @@ class SentinelData(Data):
             'resolution': '10'
         }
 
-    def set_bonds_filter(self, rect):
+    def set_bounds_filter(self, rect):
         """
         Prefilter that can be applied by query. The region of interest is calculated from a rectangle diagonal
         :param rect: Only sequence type is with four elements supported
@@ -297,7 +293,7 @@ class SentinelData(Data):
 
     def fetch_products(self, count=0):
         product_list = self.open_search.search()
-        tile = self.navigator.get_tile(product_list[0])
+        tile = self.navigator.get_dataset(product_list[0])
         return tile
 
 

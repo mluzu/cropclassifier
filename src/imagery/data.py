@@ -8,7 +8,7 @@ class Data(ABC):
     """
 
     @abstractmethod
-    def set_bonds_filter(self, bonds):
+    def set_bounds_filter(self, bounds):
         pass
 
     @abstractmethod

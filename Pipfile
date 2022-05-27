@@ -7,6 +7,7 @@ name = "pypi"
 rasterio = "*"
 fiona = "*"
 numpy = "*"
+requests = "*"
 
 [dev-packages]
 pytest = "*"

@@ -8,5 +8,5 @@ setup(
    author_email='luzuriagamariano@gmail.com',
    package_dir={"": "src"},
    packages=find_packages(where="src"),
-   install_requires=['fiona', 'requests', 'fnmatch', 'numpy', 'rasterio'],
+   install_requires=['fiona', 'requests', 'numpy', 'rasterio'],
 )

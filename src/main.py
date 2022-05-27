@@ -11,10 +11,10 @@ record = next(iter(gral_lopez_collection))
 
 collection = Collection('Sentinel-2', 'S2MSI2A', 'Level-2A')
 collection \
-    .filter_bonds(gral_lopez_collection.bounds) \
+    .filter_bonds(gral_lopez_collection) \
     .filter_cloudcoverage(0, 10) \
     .filter_date('NOW-20DAYS', 'NOW')\
-    .filter_bands('B01', 'B02', 'B03')
+    .filter_bands('B01', 'B02', 'B03', 'B04', 'B05', 'B8a', 'B11', 'B12')
 
 start_time = time.time()
 prod = collection.read()

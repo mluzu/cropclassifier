@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
    name='cropclassifier',
@@ -6,7 +6,7 @@ setup(
    description='Work in progress',
    author='Mariano Lzuriaga',
    author_email='luzuriagamariano@gmail.com',
-   package_dir={'': 'imagery'},
-   packages=['cropclassifier.imagery'],
+   package_dir={"": "src"},
+   packages=find_packages(where="src"),
    install_requires=['fiona', 'requests', 'fnmatch', 'numpy', 'rasterio'],
 )

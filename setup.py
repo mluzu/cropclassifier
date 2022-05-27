@@ -6,6 +6,7 @@ setup(
    description='Work in progress',
    author='Mariano Lzuriaga',
    author_email='luzuriagamariano@gmail.com',
-   packages=['cropclassifier'],
+   package_dir={'': 'imagery'},
+   packages=['cropclassifier.imagery'],
    install_requires=['fiona', 'requests', 'fnmatch', 'numpy', 'rasterio'],
 )

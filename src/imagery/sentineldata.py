@@ -35,8 +35,7 @@ class SentinelAPI:
                 if response.status_code == 200:
                     return response.content
                 response.raise_for_status()
-        except HTTPError:
-            raise SentinelAPIError("Failed request to SentinelApi", response)
+        except HTTPError:            raise SentinelAPIError("Failed request to SentinelApi", response)
 
 
 class SentinelOpenSearch(SentinelAPI):

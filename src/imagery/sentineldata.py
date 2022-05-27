@@ -202,7 +202,7 @@ class S2MSINavigator(SentinelAPI):
                 with memfile.open(**profile) as dataset:
                     img = dataset.read()
                     image[i::] = img
-            return image
+        return image
 
     def get_tile(self, product_node):
         self._get_manifest(product_node)

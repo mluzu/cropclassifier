@@ -206,7 +206,6 @@ class S2MSINavigator(SentinelAPI):
         self._get_granule_metadata(product_node, granule_title)
 
         resolution = self.selector.get('resolution')
-        profile = self._get_metadata_profile(resolution)
         granule_list = self._get_metadata_granule_list()
 
         selected_bands = self.selector.get('bands')
@@ -295,15 +294,3 @@ class SentinelData(Data):
         product_list = self.open_search.search()
         tile = self.navigator.get_dataset(product_list[0])
         return tile
-
-
-class MSITile:
-    def __init__(self, resolution, bands, profile, cloud_mask=None, defective_mask=None):
-        self.resolution = resolution
-        self.bands = bands
-        self.profile = profile
-        self.cloud_mask = None
-        self.defective_mask = None
-
-    def crop(self):
-        pass

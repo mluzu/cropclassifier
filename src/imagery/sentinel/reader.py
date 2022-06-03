@@ -1,7 +1,7 @@
 import re
 import fnmatch
 from io import StringIO
-import xml.etree.ElementTree as xml
+import xml.etree.ElementTree as ET
 
 
 def namespace(element):
@@ -10,19 +10,17 @@ def namespace(element):
 
 
 def parse_xml(xml_text):
-    root = xml.fromstring(xml_text)
-    namespaces = dict([node for _, node in xml.iterparse(StringIO(xml_text), events=['start-ns'])])
+    root = ET.fromstring(xml_text)
+    namespaces = dict([node for _, node in ET.iterparse(StringIO(xml_text), events=['start-ns'])])
     return root, namespaces
 
 
-class S2MSINavigator:
+class S2MsiReader:
 
-    def __init__(self, credentials, odata_base_url):
-        super().__init__(credentials, odata_base_url)
-        self.odata_path = "/odata/v1"
-        self.products_list = list()
+    def __init__(self, client, odata_path="/odata/v1"):
+        self._s2_client = client
+        self.odata_path = odata_path
         self.selector = dict()
-        self.manifest = None
         self.product_metadata = None
         self.granule_metadata = None
         self.granule_list = []
@@ -37,19 +35,19 @@ class S2MSINavigator:
     def _get_manifest(self, product_node):
         query = "{}{}/Nodes('manifest.safe')/$value".format(self.odata_path, product_node)
         response_bytes = self.api_call(query, False)
-        self.manifest = xml.fromstring(response_bytes)
+        self.manifest = ET.fromstring(response_bytes)
 
     def _get_product_metadata(self, product_node):
         query = "{}{}/Nodes('MTD_MSIL2A.xml')/$value".format(self.odata_path, product_node)
         response_bytes = self.api_call(query, False)
-        self.product_metadata = xml.fromstring(response_bytes)
+        self.product_metadata = ET.fromstring(response_bytes)
 
     def _get_granule_metadata(self, product_node, granule_title):
         url = "{}{}/Nodes('GRANULE')/Nodes('{}')/Nodes('MTD_TL.xml')/$value".format(
             self.odata_path, product_node, granule_title
         )
         response_bytes = self.api_call(url, False)
-        self.granule_metadata = xml.fromstring(response_bytes)
+        self.granule_metadata = ET.fromstring(response_bytes)
 
     def _get_granule_title(self, product_node):
         url = "{}{}/Nodes('GRANULE')/Nodes".format(self.odata_path, product_node)

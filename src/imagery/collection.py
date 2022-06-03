@@ -1,4 +1,4 @@
-from .sentineldata import SentinelData
+from .sentinel import SentinelData
 
 
 class Collection:

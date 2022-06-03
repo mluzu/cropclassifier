@@ -1,11 +1,11 @@
 from requests import Session
 from requests.exceptions import HTTPError
-from .exceptions import SentinelAPIError
+from src.imagery.sentinel.exceptions import SentinelAPIError
 
 
 class SentinelClient:
 
-    def __init__(self, credentials, odata_base_url):
+    def __init__(self, credentials, odata_base_url="https://apihub.copernicus.eu/apihub"):
         self.session = Session()
         self.session.auth = credentials
         self.odata_base_url = odata_base_url

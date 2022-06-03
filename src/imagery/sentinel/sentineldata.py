@@ -1,7 +1,6 @@
-from .data import Data
-from rasterio.io import MemoryFile
-from rasterio.crs import CRS
-import numpy as np
+from ..data import Data
+from .client import SentinelClient
+from .reader import S2MsiReader, parse_xml
 
 
 class SentinelProductList:
@@ -66,31 +65,13 @@ class SentinelProductList:
                 break
 
 
-class S2MSITiles:
-    def __init__(self, product_list, navigator):
-        self.products = product_list
-        self.navigator = navigator
-        self.tiles = []
-
-
-class MSIBand:
-    def __init__(self, name):
-        self.name = name
-        self.cloud_masks = None
-        self.nodata_masks = None
-        self.fragments = None
-        self.tiles = []
-        self.footprint = None
-
-
 class SentinelData(Data):
 
     def __init__(self):
         credentials = ('mluzu', 'aufklarung')
-        odata_base_url = "https://apihub.copernicus.eu/apihub"
-        s2_client = SentinelClient(credentials, odata_base_url)
+        s2_client = SentinelClient(credentials)
         self.products_list = SentinelProductList(s2_client)
-        self.navigator = S2MSINavigator(credentials, odata_base_url)
+        self.navigator = S2MsiReader(s2_client)
 
         self.products = None
         self.post_filters = {

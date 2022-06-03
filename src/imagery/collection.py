@@ -2,8 +2,8 @@ from .sentineldata import SentinelData
 
 
 class Collection:
-    def __init__(self, platformname, producttype, processinglevel) -> None:
-        self.data_source = SentinelData(platformname, producttype, processinglevel)
+    def __init__(self) -> None:
+        self.data_source = SentinelData()
 
     def filter_bounds(self, geometry):
         self.data_source.set_bounds_filter(geometry.bounds)

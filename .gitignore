@@ -130,4 +130,5 @@ dmypy.json
 .pyre/
 
 #pycharm
-.idea/
+.idea
+.run

@@ -9,7 +9,7 @@ shapefilePath = "/home/mluzu/cropclassifier/shapefile"
 gral_lopez_collection = fiona.open(shapefilePath)
 record = next(iter(gral_lopez_collection))
 
-collection = Collection('Sentinel-2', 'S2MSI2A', 'Level-2A')
+collection = Collection()
 collection \
     .filter_bounds(gral_lopez_collection) \
     .filter_cloudcoverage(0, 10) \

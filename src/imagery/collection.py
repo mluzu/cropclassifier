@@ -1,9 +1,10 @@
 from .sentinel import SentinelData
+from .sentinel import ProductType
 
 
 class Collection:
     def __init__(self) -> None:
-        self.data_source = SentinelData()
+        self.data_source = SentinelData(ProductType.S2MSI)
 
     def filter_bounds(self, geometry):
         self.data_source.set_bounds_filter(geometry.bounds)

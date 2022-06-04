@@ -1,77 +1,21 @@
 from ..data import Data
 from .client import SentinelClient
-from .reader import S2MsiReader, parse_xml
+from typing import Final
+from enum import Enum
 
 
-class SentinelProductList:
-
-    def __init__(self, client, platformname, producttype, processinglevel):
-        self._s2_client = client
-        self._query_filters = dict()
-        self._product_type = (platformname, producttype, processinglevel)
-        self.search_result = []
-
-    @property
-    def product_type(self):
-        if len(self.product_type) == 3:
-            return self.product_type
-        else:
-            return None
-
-    def set_query_filter(self, param, value):
-        self.query_filters.update({param: value})
-
-    def _build_search_query(self, offset, page_size):
-        if self._query_filters is None and self.product_type is None:
-            raise Exception
-
-        self.set_query_filter("platformname", self._product_type[0])
-        self.set_query_filter("producttype", self._product_type[1])
-        self.set_query_filter("processinglevel", self._product_type[2])
-
-        filters = ' AND '.join(
-            [
-                f'{key}:{value}'
-                for key, value in sorted(self._query_filters.items())
-            ]
-        )
-
-        return '/search?start={}&rows={}&q={}'.format(offset, page_size, filters)
-
-    def _add_to_products_list(self, xml_bytes):
-        root, ns = parse_xml(xml_bytes)
-        items_nodes = root.findall('entry', ns)
-        for node in items_nodes:
-            self.search_result.append(
-                f"/Products('{node.find('id', ns).text}')/Nodes('{node.find('title', ns).text}.SAFE')"
-            )
-
-    def _get_total_results(self):
-        query = self._build_search_query(0, 1)
-        response_xml = self._s2_client.api_call(query, stream=False, as_text=True)
-        root, ns = parse_xml(response_xml)
-        total = int(root.find('opensearch:totalResults', ns).text)
-        return total
-
-    def search(self, page_size=10):
-        offset = 0
-        total = self._get_total_results()
-        while True:
-            query = self._build_search_query(offset, page_size)
-            response_xml = self._s2_client.api_call(query, stream=False, as_text=True)
-            self._add_to_products_list(response_xml)
-            offset = offset + page_size
-            if offset >= total:
-                break
+class ProductType(Enum):
+    S2MSI: Final[tuple] = ('Sentinel-2', ['S2MSI2A', 'S2MSI1C'], ['Level-2A',  'Level-1C'])
 
 
 class SentinelData(Data):
 
-    def __init__(self):
+    def __init__(self, product_type):
         credentials = ('mluzu', 'aufklarung')
-        s2_client = SentinelClient(credentials)
-        self.products_list = SentinelProductList(s2_client)
-        self.navigator = S2MsiReader(s2_client)
+        client = SentinelClient(credentials)
+        parser = get_parser(product_type)
+        self.products_list = SentinelProductList(client, parser, product_type)
+        self.navigator = S2MsiReader(client)
 
         self.products = None
         self.post_filters = {
@@ -137,7 +81,141 @@ class SentinelData(Data):
         return tile
 
     def fetch_products(self, count=0):
-        self.products_list.product_type = ('Sentinel-3', 'SL_2_LST___', 'Level-2')
         self.products_list.search(100)
         tile = self.navigator.get_dataset(self.product_list[0])
         return tile
+
+
+class S2MsiReader:
+
+    def __init__(self, client):
+        self._s2_client = client
+
+        self.selector = dict()
+        self.product_metadata = None
+        self.granule_metadata = None
+        self.granule_list = []
+        self.set_resolution_selector(20)
+        self.current = None
+
+    def load(self, reader):
+        self.current = reader
+
+    def set_bands_selector(self, bands):
+        self.selector.update({"bands": bands})
+
+    def set_resolution_selector(self, resolution):
+        self.selector.update({"resolution": resolution})
+
+    def _get_manifest(self, product_node):
+        query = "{}{}/Nodes('manifest.safe')/$value".format(self.odata_path, product_node)
+        response_bytes = self.api_call(query, False)
+        self.manifest = ET.fromstring(response_bytes)
+
+    def _get_product_metadata(self, product_node):
+        query = "{}{}/Nodes('MTD_MSIL2A.xml')/$value".format(self.odata_path, product_node)
+        response_bytes = self.api_call(query, False)
+        self.product_metadata = ET.fromstring(response_bytes)
+
+    def _get_granule_metadata(self, product_node, granule_title):
+        url = "{}{}/Nodes('GRANULE')/Nodes('{}')/Nodes('MTD_TL.xml')/$value".format(
+            self.odata_path, product_node, granule_title
+        )
+        response_bytes = self.api_call(url, False)
+        self.granule_metadata = ET.fromstring(response_bytes)
+
+    def _get_granule_title(self, product_node):
+        url = "{}{}/Nodes('GRANULE')/Nodes".format(self.odata_path, product_node)
+        response_bytes = self.api_call(url, False)
+        root, ns = parse_xml(response_bytes)
+        return root.find(f'{ns}entry').find(f'{ns}title').text
+
+    def _get_manifest_granule_list(self):
+        if self.manifest is None:
+            raise Exception
+        regex = re.compile('IMG_DATA*')
+        granule_list = []
+        data_object_list = self.manifest.find('dataObjectSection').iter('dataObject')
+        for item in data_object_list:
+            if re.match(regex, item.attrib.get('ID')):
+                file_location = item.find('.//fileLocation')
+                href = file_location.attrib.get('href')
+                href = href.lstrip('.')
+            granule_list.append(href)
+        return granule_list
+
+    def _get_metadata_granule_list(self):
+        if self.product_metadata is None:
+            raise Exception
+
+        return [item.text for item in self.product_metadata.findall('.//IMAGE_FILE')]
+
+    def _get_metadata_profile(self, resolution):
+        if self.granule_metadata is None:
+            raise Exception
+
+        ns = namespace(self.granule_metadata)
+        profile = dict()
+        tile_info = self.granule_metadata.find(f'./{ns}Geometric_Info/Tile_Geocoding')
+        cs_name = tile_info.find('HORIZONTAL_CS_NAME')
+        profile.update({"crs_name": cs_name.text})
+        cs_code = tile_info.find('HORIZONTAL_CS_CODE')
+        profile.update({"crs_name": cs_code.text})
+        sizes = tile_info.iter('Size')
+        for size in sizes:
+            r = size.attrib.get('resolution')
+            if int(r) == resolution:
+                profile.update({
+                    f'size': (int(size.find('NROWS').text), int(size.find('NCOLS').text))
+                })
+
+        return profile
+
+    def filter_granules_by_resolution(self, granule_list, bands, resolution):
+        files = []
+        pattern = f'*_{resolution}m'
+        files_by_resolution = fnmatch.filter(granule_list, pattern)
+        for band in bands:
+            pattern = f'*_{band}_*'
+            for file in files_by_resolution:
+                if fnmatch.fnmatch(file, pattern):
+                    files.append(file)
+        return files
+
+    def _get_bands(self, product_node, granule_list, resolution):
+        profile = self._get_metadata_profile(resolution)
+        size = profile.get('size')
+
+        profile.update({
+            'driver': 'JP2OpenJPEG',
+            'dtype': 'uint16',
+            'nodata': None,
+            'width': size[0],
+            'height': size[1],
+            'count': 1,
+            'crs': CRS.from_epsg(32617),
+        })
+
+        for i, file_path in enumerate(granule_list):
+            granule, identifier, img_folder, res_folder, file_name = file_path.split('/')
+            query = "{}{}/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}')/Nodes('{}.jp2')/$value" \
+                .format(self.odata_path, product_node, granule, identifier, img_folder, res_folder, file_name)
+            image_bytes = self.api_call(query, stream=True)
+            mem_file = MemoryFile(image_bytes)
+            return mem_file.open(**profile)
+
+    def get_dataset(self, product_node):
+        self._get_manifest(product_node)
+        self._get_product_metadata(product_node)
+        granule_title = self._get_granule_title(product_node)
+        self._get_granule_metadata(product_node, granule_title)
+
+        resolution = self.selector.get('resolution')
+        granule_list = self._get_metadata_granule_list()
+
+        selected_bands = self.selector.get('bands')
+        # TODO: navigate to resolution folder
+        granule_list = self.filter_granules_by_resolution(granule_list, selected_bands, resolution)
+        dataset = self._get_bands(product_node, granule_list, resolution)
+        return dataset
+

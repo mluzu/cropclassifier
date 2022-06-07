@@ -24,3 +24,24 @@ class SentinelAPIError(Exception):
             reason,
             ("\n" if "\n" in self.msg else "") + self.msg,
         )
+
+
+class ReaderException(Exception):
+    def __init__(self, method, args):
+        self.method = method
+        self.args = args
+
+    def __str__(self):
+        return "Reader error calling {} with {}".format(
+            self.method,  self.args
+        )
+
+
+class SearchError(Exception):
+    def __init__(self, exception):
+        self.exception = exception
+
+    def __str__(self):
+        return "Search error: {}".format(
+            str(self.rexception),
+        )

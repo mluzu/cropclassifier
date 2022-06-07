@@ -28,5 +28,5 @@ class Data(ABC):
         pass
 
     @abstractmethod
-    def read(self, count):
+    def get(self):
         pass

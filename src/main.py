@@ -17,5 +17,5 @@ collection \
     .filter_bands('B01', 'B02', 'B03', 'B04', 'B05', 'B8A', 'B11', 'B12')
 
 start_time = time.time()
-dataset = collection.read()
+dataset = collection.get()
 print("--- %s seconds ---" % (time.time() - start_time))

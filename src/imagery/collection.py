@@ -22,8 +22,8 @@ class Collection:
         self.data_source.set_cloudcoverage_filter(minpercentage, maxpercentage)
         return self
 
-    def read(self, count=1):
-        image = self.data_source.read(count)
+    def get(self):
+        image = self.data_source.get()
         return image
 
 

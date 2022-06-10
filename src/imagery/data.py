@@ -23,10 +23,3 @@ class Data(ABC):
     def set_cloudcoverage_filter(self, minpercentage, maxpercentage):
         pass
 
-    @abstractmethod
-    def fetch_products(self):
-        pass
-
-    @abstractmethod
-    def get(self):
-        pass

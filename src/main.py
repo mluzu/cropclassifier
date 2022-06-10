@@ -1,4 +1,4 @@
-from imagery import Collection
+from imagery import Collection, Feature
 import fiona
 import time
 
@@ -7,9 +7,9 @@ shapefilePath = "/home/mluzu/cropclassifier/shapefile"
 
 
 gral_lopez_collection = fiona.open(shapefilePath)
-record = next(iter(gral_lopez_collection))
+feature = Feature(gral_lopez_collection)
 
-collection = Collection()
+collection = Collection(feature)
 collection \
     .filter_bounds(gral_lopez_collection) \
     .filter_cloudcoverage(0, 10) \
@@ -17,5 +17,5 @@ collection \
     .filter_bands('B01', 'B02', 'B03', 'B04', 'B05', 'B8A', 'B11', 'B12')
 
 start_time = time.time()
-dataset = collection.get()
+cm, cp = collection.get()
 print("--- %s seconds ---" % (time.time() - start_time))

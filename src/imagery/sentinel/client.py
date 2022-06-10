@@ -3,7 +3,6 @@ from requests import Session
 from requests.exceptions import HTTPError
 from io import StringIO
 import xml.etree.ElementTree as ET
-import re
 
 
 class SentinelClient:
@@ -37,6 +36,15 @@ class SentinelClient:
             with self.session.get(url, stream=False) as response:
                 response.raise_for_status()
                 return Reader(response.text)
+        except HTTPError:
+            raise SentinelAPIError("Failed request to SentinelApi", response)
+
+    def stream(self, query):
+        url = '{}{}{}'.format(self.odata_base_url, self.odata_path, query)
+        try:
+            with self.session.get(url, stream=True) as response:
+                response.raise_for_status()
+                return response.content
         except HTTPError:
             raise SentinelAPIError("Failed request to SentinelApi", response)
 

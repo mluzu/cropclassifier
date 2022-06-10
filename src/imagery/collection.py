@@ -3,11 +3,11 @@ from .sentinel import ProductType
 
 
 class Collection:
-    def __init__(self) -> None:
-        self.data_source = SentinelData(ProductType.S2MSI)
+    def __init__(self, feature) -> None:
+        self.data_source = SentinelData(ProductType.S2MSI, feature)
 
-    def filter_bounds(self, geometry):
-        self.data_source.set_bounds_filter(geometry.bounds)
+    def filter_bounds(self, geom):
+        self.data_source.set_bounds_filter(geom.bounds)
         return self
 
     def filter_date(self, begin, end):

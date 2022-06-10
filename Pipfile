@@ -8,6 +8,7 @@ rasterio = "*"
 fiona = "*"
 numpy = "*"
 requests = "*"
+s2cloudless = "*"
 
 [dev-packages]
 pytest = "*"

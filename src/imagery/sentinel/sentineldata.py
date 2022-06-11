@@ -3,12 +3,16 @@ from .client import SentinelClient
 from .search import SentinelProductList
 from typing import Final
 from enum import Enum
+from io import BytesIO
+import imageio
 import fnmatch
-from rasterio import MemoryFile
+from rasterio import MemoryFile, open
 from rasterio.plot import reshape_as_image
 from rasterio.crs import CRS
-from s2cloudless import S2PixelCloudDetector
 import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+import tempfile
 
 
 class ProductType(Enum):
@@ -52,18 +56,57 @@ class SentinelData(Data):
         self.navigator.bands = bands
 
     def get(self):
-        for tile_descriptor in self.products_list:
-            self.navigator.load(tile_descriptor)
-            # creo la mascara de nubes con level 1c y s2cloudless
-            cloud_prob, cloud_mask = create_cloud_mask(self.navigator)
-            # otengo las bandas del level 2A
-            #bands = self.navigator.get_level2a_bands(bands)
-            # limpio los pixeles con nube
-            #bands = clean_clouds(bands, cloud_mask)
-            # recorto las bandas
-            #bands = crop_bands(bands, self.feature)
-            # mergeo en el dataset
-            return cloud_prob, cloud_mask
+        with tempfile.NamedTemporaryFile() as tmpfile:
+
+            with open(tmpfile.name) as image_domain_dataset:
+
+                for tile_descriptor in self.products_list:
+                    # cargo el navigator con el tile descriptor
+                    self.navigator.load(tile_descriptor)
+
+                    meta = meta = self.navigator.get_level1c_metadata()
+                    profile = {
+                        'driver': 'JP2OpenJPEG',
+                        'dtype': 'uint16',
+                        'nodata': None,
+                        'width': meta['20'][0],
+                        'height': meta['20'][1],
+                        'count': 1,
+                        'crs': meta['crs'],
+                    }
+
+                    self.feature.transform_crs(meta['crs'])
+
+                    # obtengo mascara del sentinel
+                    cloud_prob_mask_bytes = self.navigator.get_cloudprob_mask()
+                    cloud_prob_mask = imageio.v3.imread(BytesIO(cloud_prob_mask_bytes))
+                    cloud_prob_mask = np.array(cloud_prob_mask)
+                    cloud_mask = np.ma.greater_equal(cloud_prob_mask, 1)
+
+
+                    # dejo pasar solo los tiles que no superan treshhold
+                    if not clouds_filter(cloud_prob_mask):
+                        continue
+
+                    # obtengo las bandas del level 2A
+                    bands = self.navigator.get_level2a_bands('B02', 'B03', 'B04', 'B05', 'B8', 'B11', 'B12')
+
+                    for band in bands:
+                        band_img = imageio.v3.imread(BytesIO(band))
+                        plt.imshow(band_img)
+
+                        # limpio los pixeles con nube
+                        band = clean_clouds(bands, cloud_mask)
+
+                        # recorto las bandas
+                        bands = crop_bands(bands, self.feature)
+
+                    # mergeo en el dataset
+                    b_mosaic, out_trans = merge(files, nodata=0)
+
+                    image_domain_dataset
+
+                return image_domain_dataset.read()
 
 
 class S2MSINavigator:
@@ -78,6 +121,7 @@ class S2MSINavigator:
         self.qi_1c_files = []
         self.metadata_2a_file = str
         self.metadata_1c_file = str
+        self.meta = dict
 
     def load(self, tile_descriptor):
         # load Level-2A file paths in manifest
@@ -142,46 +186,68 @@ class S2MSINavigator:
                                                               self.current_tile.level1C_filename,
                                                               navigator_path)
 
-    def fetch_level1c_band(self, band, meta):
+    def build_2a_granule_path(self, band, resolution=20):
+        file_path = fnmatch.filter(self.img_files, f'./GRANULE/*/IMG_DATA/R{resolution}m/*{band}*.jp2')
+        rel_dirs = file_path[0].lstrip('./').split('/')
+        navigator_path = '/'.join(
+            [
+                f"Nodes('{rel}')"
+                for rel in rel_dirs
+            ]
+        )
+        return "/Products('{}')/Nodes('{}')/{}/$value".format(self.current_tile.level2A_uuid,
+                                                              self.current_tile.level2A_filename,
+                                                              navigator_path)
+
+    def build_cloud_mask_path(self, resolution=20):
+        file_path = fnmatch.filter(self.qi_files, f'./GRANULE/*/QI_DATA/*_{resolution}m.jp2')
+        rel_dirs = file_path[0].lstrip('./').split('/')
+        navigator_path = '/'.join(
+            [
+                f"Nodes('{rel}')"
+                for rel in rel_dirs
+            ]
+        )
+        return "/Products('{}')/Nodes('{}')/{}/$value".format(self.current_tile.level2A_uuid,
+                                                              self.current_tile.level2A_filename,
+                                                              navigator_path)
+
+    def fetch_level1c_band(self, band):
         file_path = self.build_1c_granule_path(band)
         image_bytes = self.client.stream(file_path)
-        profile = {
-            'driver': 'JP2OpenJPEG',
-            'dtype': 'uint16',
-            'nodata': None,
-            'width': meta['10'][0],
-            'height': meta['10'][1],
-            'count': 1,
-            'crs': meta['crs'],
-        }
-        mem_file = MemoryFile(image_bytes)
-        img = mem_file.open(**profile).read()
-        return img
+        return image_bytes
 
     def get_level1c_bands(self, *bands):
         image_bands = []
-        meta = self.get_level1c_metadata()
         for band in bands:
-            img = self.fetch_level1c_band(band, meta)
+            img = self.fetch_level1c_band(band)
             image_bands.append(img)
-        out = np.ndarray(image_bands)
-        return reshape_as_image(out)
+        return image_bands
 
-    def get_level2a_bands(self, bands):
-        return bands
+    def fetch_level2a_band(self, band):
+        file_path = self.build_2a_granule_path(band)
+        image_bytes = self.client.stream(file_path)
+        return image_bytes
+
+    def get_level2a_bands(self, *bands):
+        image_bands = []
+        for band in bands:
+            image_bytes = self.fetch_level2a_band(band)
+            image_bands.append(image_bytes)
+        return image_bands
+
+    def get_cloudprob_mask(self):
+        mask_path = self.build_cloud_mask_path()
+        image_bytes = self.client.stream(mask_path)
+        return image_bytes
 
 
-def create_cloud_mask(navigator):
-    bands = navigator.get_level1c_bands('B01', 'B02', 'B04', 'B05', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12')
-    cloud_detector = S2PixelCloudDetector(threshold=0.4, average_over=4, dilation_size=2, all_bands=False)
-    cloud_prob = cloud_detector.get_cloud_probability_maps(bands)
-    cloud_mask = cloud_detector.get_cloud_masks(bands)
-    return cloud_prob, cloud_mask,
+def clouds_filter(mask):
+    return True
 
 
-def crop_bands(bands, feature):
-    return 0
+def clean_clouds(mask, band):
+    image = mask.read()
+    masked_imag = np.ma.masked_array(image, mask=mask)
+    return band
 
-
-def clean_clouds(navigator, cloud_mask):
-    return 0

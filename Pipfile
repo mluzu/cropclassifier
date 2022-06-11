@@ -9,6 +9,8 @@ fiona = "*"
 numpy = "*"
 requests = "*"
 s2cloudless = "*"
+pillow = "*"
+imageio = "*"
 
 [dev-packages]
 pytest = "*"
